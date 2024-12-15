@@ -77,27 +77,18 @@ def generate_tool_schema(func) -> ToolSchema:
 
     # Create prompt for LLM
     instruct = """
-    You are a helpful customer support assistant. Assist the user to do the following task.
+    You are an intelligent assistant. Your task is to generate a JSON schema in the
+    `response_format` structured output format for the provided Python function details.
 
-    Generate a JSON schema for the give information about a python function.
-    The given information will include:
-    1. Function code
+    The provided information includes:
+    1. Function source code
     2. Function docstring
     3. Function signature
 
-    Required output format:
-    {
-        "name": "function_name",
-        "description": "function description",
-        "parameters": [
-            {
-                "name": "param name",
-                "type": "param type",
-                "description": "param description",
-                "required": "Whether this parameter is required or has a default value"
-            },
-        ]
-    }
+    The JSON schema should include:
+    - Function name
+    - Function description (from the docstring)
+    - Parameters (name, type, description, and whether they are required)
     """
 
     code = f"""
