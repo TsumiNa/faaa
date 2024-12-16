@@ -5,7 +5,7 @@ import inspect
 from typing import Any, Callable
 
 from faaa.function.llm import LLMClient
-from faaa.schema import ToolSchema
+from faaa.schema.tool import ToolSchema
 from faaa.util import generate_id
 
 
@@ -43,7 +43,7 @@ class Agent:
             # Extract the information of the function
             _ = inspect.getsource(func).strip()
             code_id = generate_id(_)
-            tool_schema = LLMClient().parse(func)
+            tool_schema = LLMClient().generate_tool_schema(func)
 
             # Set API schema
             return func

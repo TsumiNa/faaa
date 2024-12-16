@@ -4,7 +4,7 @@ import openai
 import pytest
 
 from faaa.function.llm import LLMClient, RefusalError
-from faaa.schema import ToolSchema
+from faaa.schema.tool import ToolSchema
 
 
 @pytest.mark.asyncio

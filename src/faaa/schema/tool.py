@@ -38,3 +38,30 @@ class ToolSchema(BaseModel):
     description: str
     tags: List[str]
     parameters: List[ParameterSchema]
+
+
+def convert_tool_schema_to_openai_tool(tool_schema: ToolSchema) -> dict:
+    """
+    Convert a ToolSchema instance to match the tools definition used in the OpenAI's API.
+
+    Args:
+        tool_schema (ToolSchema): The ToolSchema instance to convert.
+
+    Returns:
+        dict: A dictionary matching the OpenAI's tools API definition.
+    """
+    return {
+        "name": tool_schema.name,
+        "description": tool_schema.description,
+        "parameters": {
+            "type": "object",
+            "properties": {
+                param.name: {
+                    "type": param.type,
+                    "description": param.description,
+                }
+                for param in tool_schema.parameters
+            },
+            "required": [param.name for param in tool_schema.parameters if param.required],
+        },
+    }

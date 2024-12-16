@@ -12,7 +12,7 @@ from openai.types.chat import ChatCompletionMessage
 from pydantic import BaseModel
 
 from faaa.exception import RefusalError
-from faaa.schema import ToolSchema
+from faaa.schema.tool import ToolSchema, convert_tool_schema_to_openai_tool
 
 load_dotenv()
 
@@ -159,38 +159,11 @@ class LLMClient:
                 # Handle other exceptions
                 raise e
 
-    @classmethod
-    def convert_tool_schema_to_openai_tool(cls, tool_schema: ToolSchema) -> dict:
-        """
-        Convert a ToolSchema instance to match the tools definition used in the OpenAI's API.
-
-        Args:
-            tool_schema (ToolSchema): The ToolSchema instance to convert.
-
-        Returns:
-            dict: A dictionary matching the OpenAI's tools API definition.
-        """
-        return {
-            "name": tool_schema.name,
-            "description": tool_schema.description,
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    param.name: {
-                        "type": param.type,
-                        "description": param.description,
-                    }
-                    for param in tool_schema.parameters
-                },
-                "required": [param.name for param in tool_schema.parameters if param.required],
-            },
-        }
-
     async def function_call(self, msg: list[dict], tool_schemas: list[ToolSchema]):
         try_count = 0
         while try_count < self.max_try:
             try:
-                tools = [self.convert_tool_schema_to_openai_tool(schema) for schema in tool_schemas]
+                tools = [convert_tool_schema_to_openai_tool(schema) for schema in tool_schemas]
                 completion = await self._client.chat.completions.create(
                     messages=msg,
                     model="openai/gpt-4o-mini",

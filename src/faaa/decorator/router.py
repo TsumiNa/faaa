@@ -7,7 +7,7 @@ from typing import Callable
 
 from fastapi import APIRouter
 
-from faaa.schema import ToolSchema
+from faaa.schema.tool import ToolSchema
 
 
 class AutoRouter:
