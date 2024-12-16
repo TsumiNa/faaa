@@ -3,4 +3,13 @@
 
 
 class RefusalError(Exception):
-    pass
+    """
+    Exception raised for errors that involve a refusal.
+
+    Attributes:
+        message (str): Explanation of the error.
+    """
+
+    def __init__(self, message=""):
+        self.message = f"Refusal error occurred:\n      {message}"
+        super().__init__(self.message)

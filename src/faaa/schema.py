@@ -1,12 +1,9 @@
 # Copyright 2024 TsumiNa.
 # SPDX-License-Identifier: MIT
 
-import inspect
 from typing import List
 
 from pydantic import BaseModel
-
-from faaa.llm import get_client
 
 
 class ParameterSchema(BaseModel):
@@ -33,80 +30,11 @@ class ToolSchema(BaseModel):
     Attributes:
         name (str): The name of the tool.
         description (str): A brief description of the tool.
+        tags (List[str]): A list of tags describe the catalog of the tool.
         parameters (List[ParameterSchema]): A list of parameters associated with the tool.
     """
 
     name: str
     description: str
+    tags: List[str]
     parameters: List[ParameterSchema]
-
-
-def generate_tool_schema(func) -> ToolSchema:
-    """
-    Generate a JSON schema for a Python function in ToolSchema format.
-
-    This function takes a Python function as input and generates a standardized JSON schema
-    that describes the function's name, description, and parameters. It uses introspection
-    to extract the function's source code, signature, and docstring, then leverages an LLM
-    to generate the structured schema.
-
-    Args:
-        func: The Python function to generate a schema for.
-            Must be a valid Python function with accessible source code.
-
-    Returns:
-        ToolSchema: A structured schema containing:
-            - name: The function name
-            - description: Function description from docstring
-            - parameters: List of parameter details including name, type and description
-            - required: Whether this parameter is required or has a default value.
-
-    Raises:
-        Exception: If schema generation fails or LLM encounters an error
-
-    Example:
-        >>> def add(x: int, y: int) -> int:
-        ...     '''Add two numbers'''
-        ...     return x + y
-        >>> schema = generate_tool_schema(add)
-    """
-    # Get function source code and details
-    source_code = inspect.getsource(func).strip()
-    signature = inspect.signature(func)
-    docstring = inspect.getdoc(func) or ""
-
-    # Create prompt for LLM
-    instruct = """
-    You are an intelligent assistant. Your task is to generate a JSON schema in the
-    `response_format` structured output format for the provided Python function details.
-
-    The provided information includes:
-    1. Function source code
-    2. Function docstring
-    3. Function signature
-
-    The JSON schema should include:
-    - Function name
-    - Function description (from the docstring)
-    - Parameters (name, type, description, and whether they are required)
-    """
-
-    code = f"""
-    Please help me to process the following information:
-
-    Source:
-    {source_code}
-
-    Signature:
-    {signature}
-
-    Documentation:
-    {docstring}
-    """
-
-    # Get LLM response and parse
-    llm = get_client(structured_outputs=ToolSchema)
-    try:
-        return llm({"role": "system", "content": instruct}, {"role": "user", "content": code})
-    except Exception as e:
-        raise e
