@@ -19,4 +19,28 @@ client = LLMClient()
 
 await client.chat("Hello, world!")
 
+
+# %%
+
+import inspect
+
+
+@agent.tool()
+def sum(a: int, b: int) -> int:
+    """
+    Calculates the sum of two integers.
+
+    Args:
+        a (int): The first integer.
+        b (int): The second integer.
+
+    Returns:
+        int: The sum of the two integers.
+    """
+    return a + b
+
+
+print(inspect.signature(sum))
+print(inspect.getsource(sum))
+print(inspect.getdoc(sum))
 # %%

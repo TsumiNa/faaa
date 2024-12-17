@@ -2,6 +2,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import openai
 import pytest
+from openai.types.chat import ChatCompletionMessageParam
 
 from faaa.function.llm import LLMClient, RefusalError
 from faaa.schema.tool import ToolSchema
@@ -10,7 +11,7 @@ from faaa.schema.tool import ToolSchema
 @pytest.mark.asyncio
 async def test_chat_success():
     client = LLMClient()
-    messages = [{"role": "user", "content": "Hello, how are you?"}]
+    messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Hello, how are you?"}]
     expected_response = {"role": "assistant", "content": "I'm good, thank you!"}
 
     with patch.object(
@@ -25,7 +26,7 @@ async def test_chat_success():
 @pytest.mark.asyncio
 async def test_chat_too_many_tokens():
     client = LLMClient()
-    messages = [{"role": "user", "content": "Hello, how are you?"}]
+    messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Hello, how are you?"}]
 
     with patch.object(
         client._client.chat.completions,
@@ -39,7 +40,7 @@ async def test_chat_too_many_tokens():
 @pytest.mark.asyncio
 async def test_chat_other_exception():
     client = LLMClient()
-    messages = [{"role": "user", "content": "Hello, how are you?"}]
+    messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Hello, how are you?"}]
 
     with patch.object(
         client._client.chat.completions, "create", new=AsyncMock(side_effect=Exception("API error"))
@@ -76,8 +77,8 @@ async def test_embeddings_exception():
 @pytest.mark.asyncio
 async def test_parse_success():
     client = LLMClient()
-    messages = [{"role": "user", "content": "Parse this message"}]
-    structured_outputs = Mock()
+    messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Parse this message"}]
+    structured_outputs = ToolSchema
     expected_response = Mock(parsed={"key": "value"})
 
     with patch.object(
@@ -92,8 +93,8 @@ async def test_parse_success():
 @pytest.mark.asyncio
 async def test_parse_refusal_error():
     client = LLMClient()
-    messages = [{"role": "user", "content": "Parse this message"}]
-    structured_outputs = Mock()
+    messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Parse this message"}]
+    structured_outputs = ToolSchema
     refusal_message = Mock(refusal="Refusal reason")
 
     with patch.object(
@@ -108,8 +109,8 @@ async def test_parse_refusal_error():
 @pytest.mark.asyncio
 async def test_parse_no_choices():
     client = LLMClient()
-    messages = [{"role": "user", "content": "Parse this message"}]
-    structured_outputs = Mock()
+    messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Parse this message"}]
+    structured_outputs = ToolSchema
 
     with patch.object(
         client._client.beta.chat.completions,
@@ -123,8 +124,8 @@ async def test_parse_no_choices():
 @pytest.mark.asyncio
 async def test_parse_too_many_tokens():
     client = LLMClient()
-    messages = [{"role": "user", "content": "Parse this message"}]
-    structured_outputs = Mock()
+    messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Parse this message"}]
+    structured_outputs = ToolSchema
 
     with patch.object(
         client._client.beta.chat.completions,
@@ -138,8 +139,8 @@ async def test_parse_too_many_tokens():
 @pytest.mark.asyncio
 async def test_parse_other_exception():
     client = LLMClient()
-    messages = [{"role": "user", "content": "Parse this message"}]
-    structured_outputs = Mock()
+    messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Parse this message"}]
+    structured_outputs = ToolSchema
 
     with patch.object(
         client._client.beta.chat.completions,
@@ -153,8 +154,8 @@ async def test_parse_other_exception():
 @pytest.mark.asyncio
 async def test_function_call_success():
     client = LLMClient()
-    messages = [{"role": "user", "content": "Call this function"}]
-    tool_schemas = [Mock(parameters=[])]
+    messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Call this function"}]
+    tool_schemas = [Mock(parameters=[], spec=ToolSchema)]
     expected_function_call = {"name": "test_function", "arguments": {}}
 
     with patch.object(
