@@ -1,17 +1,19 @@
 # Copyright 2024 TsumiNa.
 # SPDX-License-Identifier: MIT
 
+import asyncio
 import inspect
 import os
-from typing import Callable, Type, TypeVar
+from typing import Callable, Sequence, Type, TypeVar
 
 import openai
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletionMessage
+from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageParam
 from pydantic import BaseModel
 
 from faaa.exception import RefusalError
+from faaa.function.prompt import CODE_SUMMARY_INSTRUCTION, TOOL_CALLING_INSTRUCTION
 from faaa.schema.tool import ToolSchema, convert_tool_schema_to_openai_tool
 
 load_dotenv()
@@ -24,7 +26,7 @@ class LLMClient:
     _instance = None
     _API_KEY = os.getenv("OPENAI_API_KEY")
     _BASE_URL = os.getenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
-    max_try = 3
+    _max_try = 3
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
@@ -36,6 +38,14 @@ class LLMClient:
         self._client = AsyncOpenAI(base_url=self._BASE_URL, api_key=self._API_KEY)
 
     @property
+    def max_try(self):
+        return self._max_try
+
+    @max_try.setter
+    def max_try(self, value: int):
+        self._max_try = value
+
+    @property
     def client(self):
         return self._client
 
@@ -44,7 +54,10 @@ class LLMClient:
         self._client = value
 
     async def chat(
-        self, messages: str | list[dict], model: str = "openai/gpt-4o-mini", max_tokens: int = 500
+        self,
+        messages: str | Sequence[ChatCompletionMessageParam],
+        model: str = "openai/gpt-4o-mini",
+        max_tokens: int = 500,
     ) -> ChatCompletionMessage:
         """
         Asynchronously sends a chat request to the OpenAI API and returns the model's response.
@@ -112,10 +125,11 @@ class LLMClient:
 
     async def parse(
         self,
-        *msg: list[dict],
+        *msg: ChatCompletionMessageParam,
         structured_outputs: Type[T],
         model: str = "openai/gpt-4o-mini",
         max_token: int = 200,
+        max_try: int | None = None,  # Add max_try parameter
     ) -> T:
         """
         Asynchronously parses a list of messages using a specified language model and returns the structured output.
@@ -125,6 +139,7 @@ class LLMClient:
             structured_outputs (Type[T]): The expected type of the structured output.
             model (str, optional): The model to be used for parsing. Defaults to "openai/gpt-4o-mini".
             max_token (int, optional): The maximum number of tokens allowed in the response. Defaults to 200.
+            max_try (int, optional): Maximum number of retry attempts. Defaults to 3.
 
         Returns:
             T: The parsed structured output.
@@ -134,57 +149,93 @@ class LLMClient:
             ValueError: If no choices are found in the completion response.
             Exception: For other exceptions that may occur during parsing.
         """
-        try:
-            completion = await self._client.beta.chat.completions.parse(
-                messages=msg,
-                model=model,
-                response_format=structured_outputs,
-                max_tokens=max_token,
-            )
-            if completion.choices:
-                response = completion.choices[0].message
-                if hasattr(response, "parsed") and response.parsed:
-                    return response.parsed
-                elif hasattr(response, "refusal") and response.refusal:
-                    # handle refusal
-                    raise RefusalError(response.refusal)
-            else:
-                raise ValueError("No choices found in the completion response")
-        except Exception as e:
-            # Handle edge cases
-            if isinstance(e, openai.LengthFinishReasonError):
-                # Retry with a higher max tokens
-                raise RefusalError(f"Too many tokens: {e}")
-            else:
-                # Handle other exceptions
-                raise e
+        attempt = 0
+        last_error = None
 
-    async def function_call(self, msg: list[dict], tool_schemas: list[ToolSchema]):
-        try_count = 0
-        while try_count < self.max_try:
+        if max_try is None:
+            max_try = self._max_try
+
+        while attempt < max_try:
+            try:
+                completion = await self._client.beta.chat.completions.parse(
+                    messages=msg,
+                    model=model,
+                    response_format=structured_outputs,
+                    max_tokens=max_token,
+                )
+                if completion.choices:
+                    response = completion.choices[0].message
+                    if hasattr(response, "parsed") and response.parsed:
+                        return response.parsed
+                    elif hasattr(response, "refusal") and response.refusal:
+                        last_error = RefusalError(response.refusal)
+                        break  # Don't retry on explicit refusal
+                else:
+                    last_error = ValueError("No choices found in the completion response")
+            except openai.LengthFinishReasonError as e:
+                last_error = RefusalError(f"Too many tokens: {e}")
+            except Exception as e:
+                last_error = e
+
+            attempt += 1
+            if attempt < max_try:
+                # Exponential backoff between retries
+                await asyncio.sleep(2**attempt)
+
+        # If we've exhausted all retries, raise the last error
+        if isinstance(last_error, RefusalError):
+            raise last_error
+        else:
+            raise ValueError(f"Failed to parse after {max_try} attempts: {last_error}")
+
+    async def function_call(
+        self,
+        msg: list[ChatCompletionMessageParam] | str,
+        tool_schemas: list[ToolSchema],
+        *,
+        max_try: int | None = None,
+    ):
+        attempt = 0
+        last_error = None
+
+        if max_try is None:
+            max_try = self._max_try
+        if isinstance(msg, str):
+            msg = [{"role": "user", "content": msg}]
+        msg.insert(0, {"role": "system", "content": TOOL_CALLING_INSTRUCTION})
+        while attempt < max_try:
             try:
                 tools = [convert_tool_schema_to_openai_tool(schema) for schema in tool_schemas]
                 completion = await self._client.chat.completions.create(
                     messages=msg,
                     model="openai/gpt-4o-mini",
-                    functions=tools,
-                    function_call="auto",
+                    tools=tools,
+                    tool_choice="auto",
                 )
                 if completion.choices:
                     response = completion.choices[0].message
                     if response.function_call:
                         return response.function_call
                     elif response.refusal:
-                        try_count += 1
-                        continue
+                        last_error = RefusalError(response.refusal)
                 else:
-                    raise ValueError("No choices found in the completion response")
+                    last_error = ValueError("No choices found in the completion response")
             except Exception as e:
                 if isinstance(e, openai.LengthFinishReasonError):
-                    raise RefusalError(f"Too many tokens: {e}")
+                    last_error = RefusalError(f"Too many tokens: {e}")
                 else:
-                    raise e
-        raise RefusalError("LLM refused to run your function")
+                    last_error = e
+
+            attempt += 1
+            if attempt < max_try:
+                # Exponential backoff between retries
+                await asyncio.sleep(2**attempt)
+
+        # If we've exhausted all retries, raise the last error
+        if isinstance(last_error, RefusalError):
+            raise last_error
+        else:
+            raise ValueError(f"Failed to parse after {max_try} attempts: {last_error}")
 
     async def generate_tool_schema(self, func: Callable) -> ToolSchema:
         """
@@ -225,25 +276,7 @@ class LLMClient:
         docstring = inspect.getdoc(func)
         code = inspect.getsource(func).strip()
 
-        instruct = """
-        You are an intelligent assistant. Your task is to generate a JSON schema in the
-        `response_format` structured output format for the provided Python function details.
-
-        The provided information includes:
-        1. Function name
-        2. Function signature
-        3. Function docstring or source code
-
-        Include:
-        - Function name
-        - Function description (from docstring or code)
-        - Tags (max 3 tags describing function usage)
-        - Parameters (name, type, description, required status. 
-          If the parameter type or description is not clear, you can assume it yourself)
-        """
-
         code_msg = f"""
-        Please process:
         <Function name>
         {name}
         </Function name>
@@ -259,7 +292,7 @@ class LLMClient:
 
         try:
             return await self.parse(
-                {"role": "system", "content": instruct},
+                {"role": "system", "content": CODE_SUMMARY_INSTRUCTION},
                 {"role": "user", "content": code_msg},
                 structured_outputs=ToolSchema,
             )

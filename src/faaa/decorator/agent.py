@@ -11,12 +11,11 @@ from faaa.util import generate_id
 
 class Agent:
     _instance = None
-    _tool_schemas: dict[str, ToolSchema] = None
+    _tool_schemas: dict[str, ToolSchema] = {}
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(Agent, cls).__new__(cls)
-            cls._tool_schemas = {}
         return cls._instance
 
     def __init__(self, **kwargs):
@@ -49,9 +48,3 @@ class Agent:
             return func
 
         return _ret
-
-
-# Example usage:
-# singleton = Agent()
-# singleton.set_tool_schema("tool1", generate_tool_schema("tool1"))
-# schema = singleton.get_tool_schema("tool1")

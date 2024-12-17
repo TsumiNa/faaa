@@ -1,5 +1,6 @@
 {
     "python.analysis.autoImportCompletions": true,
+    "python.defaultInterpreterPath": ".venv/bin/python",
     //Python
     "[python]": {
         "editor.formatOnSave": true,
