@@ -4,8 +4,8 @@ import openai
 import pytest
 from openai.types.chat import ChatCompletionMessageParam
 
-from faaa.function.llm import LLMClient, RefusalError
-from faaa.schema.tool import ToolSchema
+from faaa.core.llm import LLMClient, RefusalError
+from faaa.core.tool_schema import Tool
 
 
 @pytest.mark.asyncio
@@ -78,7 +78,7 @@ async def test_embeddings_exception():
 async def test_parse_success():
     client = LLMClient()
     messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Parse this message"}]
-    structured_outputs = ToolSchema
+    structured_outputs = Tool
     expected_response = Mock(parsed={"key": "value"})
 
     with patch.object(
@@ -94,7 +94,7 @@ async def test_parse_success():
 async def test_parse_refusal_error():
     client = LLMClient()
     messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Parse this message"}]
-    structured_outputs = ToolSchema
+    structured_outputs = Tool
     refusal_message = Mock(refusal="Refusal reason")
 
     with patch.object(
@@ -110,7 +110,7 @@ async def test_parse_refusal_error():
 async def test_parse_no_choices():
     client = LLMClient()
     messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Parse this message"}]
-    structured_outputs = ToolSchema
+    structured_outputs = Tool
 
     with patch.object(
         client._client.beta.chat.completions,
@@ -125,7 +125,7 @@ async def test_parse_no_choices():
 async def test_parse_too_many_tokens():
     client = LLMClient()
     messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Parse this message"}]
-    structured_outputs = ToolSchema
+    structured_outputs = Tool
 
     with patch.object(
         client._client.beta.chat.completions,
@@ -140,7 +140,7 @@ async def test_parse_too_many_tokens():
 async def test_parse_other_exception():
     client = LLMClient()
     messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Parse this message"}]
-    structured_outputs = ToolSchema
+    structured_outputs = Tool
 
     with patch.object(
         client._client.beta.chat.completions,
@@ -155,7 +155,7 @@ async def test_parse_other_exception():
 async def test_function_call_success():
     client = LLMClient()
     messages: list[ChatCompletionMessageParam] = [{"role": "user", "content": "Call this function"}]
-    tool_schemas = [Mock(parameters=[], spec=ToolSchema)]
+    tool_schemas = [Mock(parameters=[], spec=Tool)]
     expected_function_call = {"name": "test_function", "arguments": {}}
 
     with patch.object(
@@ -221,7 +221,7 @@ async def test_function_call_too_many_tokens():
 async def test_function_call_other_exception():
     client = LLMClient()
     messages = [{"role": "user", "content": "Call this function"}]
-    tool_schemas = [Mock(spec=ToolSchema)]
+    tool_schemas = [Mock(spec=Tool)]
     tool_schemas[0].name = "mock_tool"
     tool_schemas[0].description = "mock_description"
     tool_schemas[0].parameters = []

@@ -7,9 +7,9 @@ from openai.types.chat import ChatCompletionToolParam
 from pydantic import BaseModel
 
 
-class ParameterSchema(BaseModel):
+class ToolParameter(BaseModel):
     """
-    ParameterSchema is a Pydantic model that represents a parameter with the following attributes:
+    ToolParameter is a Pydantic model that represents a parameter with the following attributes:
 
     Attributes:
         name (str): The name of the parameter.
@@ -24,9 +24,9 @@ class ParameterSchema(BaseModel):
     required: bool
 
 
-class ToolSchema(BaseModel):
+class Tool(BaseModel):
     """
-    ToolSchema represents the schema for a tool with its name, description, and parameters.
+    Tool represents the schema for a tool with its name, description, and parameters.
 
     Attributes:
         name (str): The name of the tool.
@@ -38,26 +38,36 @@ class ToolSchema(BaseModel):
     name: str
     description: str
     tags: List[str]
-    parameters: List[ParameterSchema]
+    parameters: List[ToolParameter]
 
 
 class ToolCallParam(BaseModel):
+    """
+    ToolCallParam is a model that defines the schema for tool call parameters.
+
+    Attributes:
+        type (str): The type of the parameter, default is "object".
+        required (list[str]): A list of required parameter names.
+        properties (dict[str, dict[str, str]]): A dictionary defining the properties of the parameters. Each key is a parameter name, and the value is another dictionary that defines the attributes of the parameter.
+    """
+
     type: str = "object"
     required: list[str]
     properties: dict[str, dict[str, str]]
 
 
-def convert_tool_schema_to_openai_tool(tool_schema: ToolSchema) -> ChatCompletionToolParam:
+def convert_tool_schema_to_openai_tool(tool_schema: Tool) -> ChatCompletionToolParam:
     """
-    Convert a ToolSchema instance to match the tools definition used in the OpenAI's API.
+    Converts a ToolSchema object to a ChatCompletionToolParam object for OpenAI.
 
     Args:
-        tool_schema (ToolSchema): The ToolSchema instance to convert.
+        tool_schema (ToolSchema): The schema of the tool to be converted.
 
     Returns:
-        dict: A dictionary matching the OpenAI's tools API definition.
+        ChatCompletionToolParam: The converted tool schema in the format required by OpenAI.
     """
-    _parameters = ToolCallParam(
+    _parameters = dict(
+        type="object",
         properties={
             param.name: {
                 "type": param.type,
@@ -74,7 +84,7 @@ def convert_tool_schema_to_openai_tool(tool_schema: ToolSchema) -> ChatCompletio
             "function": {
                 "name": tool_schema.name,
                 "description": tool_schema.description,
-                "parameters": _parameters.model_dump(),
+                "parameters": _parameters,
             },
         }
     )

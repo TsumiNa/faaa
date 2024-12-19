@@ -12,9 +12,9 @@ from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageParam
 from pydantic import BaseModel
 
+from faaa.core.tool_schema import Tool, convert_tool_schema_to_openai_tool
 from faaa.exception import RefusalError
-from faaa.function.prompt import CODE_SUMMARY_INSTRUCTION, TOOL_CALLING_INSTRUCTION
-from faaa.schema.tool import ToolSchema, convert_tool_schema_to_openai_tool
+from faaa.prompt import CODE_SUMMARY_INSTRUCTION, TOOL_CALLING_INSTRUCTION
 
 load_dotenv()
 
@@ -135,7 +135,7 @@ class LLMClient:
         Asynchronously parses a list of messages using a specified language model and returns the structured output.
 
         Args:
-            *msg (list[dict]): A variable number of message dictionaries to be parsed.
+            *msg (ChatCompletionMessageParam): A variable number of message dictionaries to be parsed.
             structured_outputs (Type[T]): The expected type of the structured output.
             model (str, optional): The model to be used for parsing. Defaults to "openai/gpt-4o-mini".
             max_token (int, optional): The maximum number of tokens allowed in the response. Defaults to 200.
@@ -191,7 +191,7 @@ class LLMClient:
     async def function_call(
         self,
         msg: list[ChatCompletionMessageParam] | str,
-        tool_schemas: list[ToolSchema],
+        tool_schemas: list[Tool],
         *,
         max_try: int | None = None,
     ):
@@ -214,10 +214,14 @@ class LLMClient:
                 )
                 if completion.choices:
                     response = completion.choices[0].message
-                    if response.function_call:
-                        return response.function_call
+                    if response.tool_calls:
+                        return response.tool_calls
                     elif response.refusal:
                         last_error = RefusalError(response.refusal)
+                    else:
+                        last_error = ValueError(
+                            f"No tool calls found in the completion response: {response.content}"
+                        )
                 else:
                     last_error = ValueError("No choices found in the completion response")
             except Exception as e:
@@ -237,7 +241,7 @@ class LLMClient:
         else:
             raise ValueError(f"Failed to parse after {max_try} attempts: {last_error}")
 
-    async def generate_tool_schema(self, func: Callable) -> ToolSchema:
+    async def generate_tool_description(self, func: Callable) -> Tool:
         """
         Asynchronously generates a schema for a given function using LLM.
 
@@ -264,7 +268,7 @@ class LLMClient:
             async def my_func(x: int) -> str:
                 return str(x)
 
-            schema = await generate_tool_schema(my_func)
+            schema = await generate_tool_description(my_func)
             ```
         """
         if not callable(func):
@@ -294,7 +298,7 @@ class LLMClient:
             return await self.parse(
                 {"role": "system", "content": CODE_SUMMARY_INSTRUCTION},
                 {"role": "user", "content": code_msg},
-                structured_outputs=ToolSchema,
+                structured_outputs=Tool,
             )
         except Exception as e:
             raise e

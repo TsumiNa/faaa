@@ -2,45 +2,75 @@
 # SPDX-License-Identifier: MIT
 
 # %%
-from http import client
 
-from faaa.decorator import agent
-from faaa.decorator.router import AutoRouter
-
-auto_router = AutoRouter()
-relative_path = auto_router.get_relative_path(agent.Agent)
-print(relative_path)
-
-# %%
-from faaa.decorator import agent
-from faaa.function.llm import LLMClient
-
-client = LLMClient()
-
-await client.chat("Hello, world!")
+import yaml
+from pydantic import BaseModel
 
 
-# %%
-
-import inspect
-
-
-@agent.tool()
-def sum(a: int, b: int) -> int:
+class ParameterSchema(BaseModel):
     """
-    Calculates the sum of two integers.
+    ParameterSchema is a Pydantic model that represents a parameter with the following attributes:
+
+    Attributes:
+        name (str): The name of the parameter.
+        type (str): The type of the parameter.
+        description (str): A brief description of the parameter.
+        required (bool): Whether this parameter is required or has a default value.
+    """
+
+    name: str
+    type: str
+    description: str
+    required: bool
+
+
+class Tool(BaseModel):
+    """
+    ToolSchema represents the schema for a tool with its name, description, and parameters.
+
+    Attributes:
+        name (str): The name of the tool.
+        description (str): A brief description of the tool.
+        tags (List[str]): A list of tags describe the catalog of the tool.
+        parameters (List[ParameterSchema]): A list of parameters associated with the tool.
+    """
+
+    name: str
+    description: str
+    tags: list[str]
+    parameters: list[ParameterSchema]
+
+
+def pydantic_to_yaml(pydantic_obj: BaseModel) -> str:
+    """
+    Converts a Pydantic object to a YAML-formatted string without brackets or quotes.
 
     Args:
-        a (int): The first integer.
-        b (int): The second integer.
+        pydantic_obj (BaseModel): The Pydantic object to convert.
 
     Returns:
-        int: The sum of the two integers.
+        str: A YAML-formatted string representing the Pydantic object.
     """
-    return a + b
+    if not isinstance(pydantic_obj, BaseModel):
+        raise ValueError("Input must be a Pydantic BaseModel object.")
+
+    # Convert the Pydantic object to a dictionary
+    data = pydantic_obj.model_dump()
+
+    # Convert the dictionary to a YAML-formatted string
+    yaml_output = yaml.dump(data, sort_keys=False, default_flow_style=False)
+
+    return yaml_output
 
 
-print(inspect.signature(sum))
-print(inspect.getsource(sum))
-print(inspect.getdoc(sum))
+# Create an example instance
+tool = Tool(name="example_tool", description="A sample tool", tags=["sample", "demo"], parameters=[])
+
+query = "Hello, world!"
+query = f"""
+<Query>{query}</Query>
+{'\n'.join(['<Tool>\n'+pydantic_to_yaml(s)+'</Tool>' for s in [tool, tool]])}
+"""
+
+print(query)
 # %%
