@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 import pytest_asyncio
 
-from faaa.core.tool_schema import Tool, ToolParameter
+from faaa.core.tool_schema import ToolParameter, ToolSchema
 from faaa.decorator.agent import Agent, AgentError, _AgentToolSchema
 
 
@@ -25,7 +25,7 @@ async def agent():
 
 @pytest.fixture
 def mock_tool_schema():
-    return Tool(
+    return ToolSchema(
         name="test_function",
         description="A test function",
         tags=["test"],
@@ -227,7 +227,7 @@ def test_agent_repr(agent):
         func=sync_test_func,
         entry_points="/test/v1/test",
         code_id="test_id",
-        tool=Tool(name="test", description="test", tags=["test"], parameters=[]),
+        tool=ToolSchema(name="test", description="test", tags=["test"], parameters=[]),
     )
     agent._tools["test_id"] = mock_schema
 

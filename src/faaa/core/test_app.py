@@ -3,8 +3,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastapi import FastAPI
 
-from faaa.app import DynamicPlan, DynamicPlanTracer, FaaA
-from faaa.core.tool_schema import Tool, ToolParameter
+from faaa.core.app import DynamicPlan, DynamicPlanTracer, FaaA
+from faaa.core.tool_schema import ToolParameter, ToolSchema
 from faaa.decorator.agent import Agent
 
 
@@ -60,7 +60,7 @@ async def test_generate_plan_no_agents():
 @pytest.mark.asyncio
 async def test_generate_plan_with_agents():
     app = FaaA()
-    mock_tool = Tool(
+    mock_tool = ToolSchema(
         name="test_tool",
         description="test description",
         tags=["test"],
@@ -105,7 +105,7 @@ async def test_repr_no_agents():
 @pytest.mark.asyncio
 async def test_repr_with_agents():
     app = FaaA()
-    mock_tool = Tool(
+    mock_tool = ToolSchema(
         name="test_tool",
         description="test description",
         tags=["test"],

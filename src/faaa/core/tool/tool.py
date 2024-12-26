@@ -8,55 +8,28 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import wraps
 from typing import Any, Callable, Coroutine
 
-from pydantic import BaseModel
-
-from faaa.core.llm import LLMClient
-from faaa.core.tool_schema import Tool
+from faaa.core.tool.schema import ToolSchema
+from faaa.provider import OpenAIClient
 from faaa.util import generate_id
 
 
-class AgentError(Exception):
-    def __init__(self, message: str | BaseException | None = None):
-        self.message = f"Agent error: {message}"
-        super().__init__(self.message)
-
-
-class _AgentToolSchema(BaseModel):
-    """
-    A schema class for representing an agent with various attributes.
-
-    Attributes:
-        func (Callable): The function associated with the agent.
-        entry_points (str): The entry points for the agent.
-        code_id (str): The unique identifier for the code.
-        is_async (bool): Indicates whether the agent operates asynchronously.
-        tool (Tool): The tool associated with the agent.
-    """
-
-    func: Callable
-    entry_points: str
-    code_id: str
-    tool: Tool
-
-
-class Agent:
-    def __init__(self, *, prefix_path: str = "/agent/v1", **kwargs):
+class Tool:
+    def __init__(self, **kwargs):
         self._llm_client = None
-        self._tools: dict[str, _AgentToolSchema] = {}
-        self._prefix_path = prefix_path
+        self._tools: dict[str, ToolSchema] = {}
         self._thread_pool_executor: ThreadPoolExecutor | None = None
         self._process_pool_executor: ProcessPoolExecutor | None = None
-        self._registration_tasks: Coroutine[Any, Any, _AgentToolSchema | None] = []
+        self._registration_tasks: list[Coroutine[Any, Any, ToolSchema | None]] = []
 
     @property
     def llm_client(self):
         if self._llm_client is None:
-            self._llm_client = LLMClient()
+            self._llm_client = OpenAIClient()
         return self._llm_client
 
-    async def register_tools(self):
+    async def _init_tools(self) -> dict[str, ToolSchema] | None:
         if not self._registration_tasks:
-            return
+            return None
         self._tools = {t.code_id: t for t in await asyncio.gather(*self._registration_tasks) if t is not None}
 
         self._registration_tasks.clear()  # Clear tasks after execution
@@ -73,13 +46,13 @@ class Agent:
         """Update agent configuration with provided kwargs."""
         pass
 
-    @staticmethod
-    def _get_source_code(func: Callable) -> str:
+    @classmethod
+    def _get_source_code(self, func: Callable) -> str:
         """Get source code of a function. This is a separate function to be picklable."""
         return inspect.getsource(func).strip()
 
     @classmethod
-    def get_function_file_name(cls, func: Callable) -> str:
+    def _get_function_file_name(cls, func: Callable) -> str:
         try:
             # Get the file path where the function is located
             file_path = inspect.getfile(func)
@@ -94,9 +67,7 @@ class Agent:
             # Return "/" for built-in or unknown functions
             return "/"
 
-    async def _register_tool(
-        self, original_func: Callable, wrapped_func: Callable
-    ) -> _AgentToolSchema | None:
+    async def _func_register(self, original_func: Callable, wrapped_func: Callable) -> ToolSchema | None:
         """
         Register a function as a tool.
 
@@ -118,19 +89,15 @@ class Agent:
         if self._thread_pool_executor is None:
             raise ValueError("ThreadPoolExecutor not initialized.")
 
-        tool_schema = await self.llm_client.generate_tool_description(original_func)
-        file_name = self.get_function_file_name(original_func)
-        prefix_path = f"{self._prefix_path}/{file_name}"
-        entry_points = f"{prefix_path}/{tool_schema.name}"
+        tool_schema = await self.llm_client.tool_description(original_func)
 
-        return _AgentToolSchema(
+        return ToolSchema(
             func=wrapped_func,  # Store wrapped function for execution
-            entry_points=entry_points,
             code_id=code_id,
             tool=tool_schema,
         )
 
-    def register(self, *, use_process=False):
+    def add(self, *, use_process=False):
         def decorator(func):
             if not callable(func):
                 raise ValueError("The provided func must be a callable")
@@ -158,7 +125,7 @@ class Agent:
                 wrapped = sync_wrapper
 
             # Add registration task with both original and wrapped functions
-            self._registration_tasks.append(self._register_tool(func, wrapped))
+            self._registration_tasks.append(self._func_register(func, wrapped))
             return wrapped
 
         return decorator
